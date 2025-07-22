@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
+import java.time.LocalTime;
 import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -21,7 +22,6 @@ public class Ping {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
     private static final Path ORIGINAL_IMAGE = Paths.get("Ping.jpg");
-    private static int x = 0;
     private static String lastKnownDate;
     private static String HOST_NAME;
     private static Path DIRECTORY;
@@ -57,8 +57,7 @@ public class Ping {
                     } catch (IOException e) {
                         System.err.println("Network error occurs: " + e.getMessage());
                     }
-                    drawPing(reachable, x);
-                    x += 2;
+                    drawPing(reachable);
                 }
                 , 0, 1, TimeUnit.MINUTES);
     }
@@ -67,13 +66,12 @@ public class Ping {
         String currentDate = DATE_FORMAT.format(new Date());
 
         if (!currentDate.equals(lastKnownDate)) {
-            x = 0;
             lastKnownDate = currentDate;
         }
         return lastKnownDate;
     }
 
-    private static void drawPing(boolean reachable, int x) {
+    private static void drawPing(boolean reachable) {
         Graphics g = null;
         BufferedImage originalImage = null;
         BufferedImage modifiedImage = null;
@@ -91,10 +89,11 @@ public class Ping {
                     originalImage.getHeight(),
                     originalImage.getType()
             );
+            LocalTime now = LocalTime.now();
             g = modifiedImage.getGraphics();
             g.drawImage(originalImage, 0, 0, null);
             g.setColor(reachable ? Color.green : Color.red);
-            g.fillRect(x, 0, 2, 557);
+            g.fillRect((now.getHour() * 60 + now.getMinute())*2, 0, 2, 557);
 
             saveModifiedImage(modifiedImage, targetPath);
         } catch (IOException e) {
