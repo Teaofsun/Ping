@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -21,45 +22,64 @@ import java.util.concurrent.TimeUnit;
 public class Ping {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final Path ORIGINAL_IMAGE = Paths.get("Ping.jpg");
     private static String lastKnownDate;
     private static String HOST_NAME;
     private static Path DIRECTORY;
+    private static ScheduledExecutorService scheduler;
 
-    public static void main(String[] args) throws IOException {
-        HOST_NAME = args[0];
-        DIRECTORY = Files.createDirectories(Paths.get(HOST_NAME));
+    public Ping() {
+    }
+
+    public static void start(String hostName) {
+        HOST_NAME = hostName;
+        System.out.println("Начал работу");
+        try {
+            DIRECTORY = Files.createDirectories(Paths.get(HOST_NAME));
+        } catch (IOException e) {
+            throw new RuntimeException("Не удалось создать папку", e);
+        }
+
         if (Files.notExists(ORIGINAL_IMAGE)) {
             throw new RuntimeException("Отсутствует изначальное изображение");
         }
 
+        scheduler = Executors.newSingleThreadScheduledExecutor();
 
 
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                    System.out.println("программа завершается");
-                    scheduler.shutdown();
-                    try {
-                        if (!scheduler.awaitTermination(1, TimeUnit.MINUTES)) {
-                            scheduler.shutdownNow();
-                        }
-                    } catch (InterruptedException e) {
-                        scheduler.shutdownNow();
-                        Thread.currentThread().interrupt();
-                    }
-                })
-        );
         scheduler.scheduleAtFixedRate(() -> {
-                    boolean reachable = false;
-                    try {
-                        reachable = InetAddress.getByName(HOST_NAME).isReachable(4000);
-                    } catch (IOException e) {
-                        System.err.println("Network error occurs: " + e.getMessage());
-                    }
+                    boolean reachable = pingIsReachable();
                     drawPing(reachable);
                 }
                 , 0, 1, TimeUnit.MINUTES);
+
+    }
+
+    private static boolean pingIsReachable() {
+        boolean reachable = false;
+        try {
+            String currentTime = LocalTime.now().format(TIME_FORMATTER);
+            long start = System.currentTimeMillis();
+            reachable = InetAddress.getByName(HOST_NAME).isReachable(4000);
+            long end = System.currentTimeMillis();
+            Window.getInstance().addLog(currentTime + " | " + "Ответ от " + HOST_NAME + " " + reachable + " за " + (end - start) + "мс");
+        } catch (IOException e) {
+            System.err.println("Network error occurs: " + e.getMessage());
+        }
+        return reachable;
+    }
+
+    public static void stop() {
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(1, TimeUnit.MINUTES)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+        }
+        System.out.println("Ping остановлен");
     }
 
     private static String getDate() {
@@ -93,8 +113,8 @@ public class Ping {
             g = modifiedImage.getGraphics();
             g.drawImage(originalImage, 0, 0, null);
             g.setColor(reachable ? Color.green : Color.red);
-            g.fillRect((now.getHour() * 60 + now.getMinute())*2, 0, 2, 557);
-
+            g.fillRect((now.getHour() * 60 + now.getMinute()) * 2, 0, 2, 557);
+            Window.getInstance().drawImage(modifiedImage);
             saveModifiedImage(modifiedImage, targetPath);
         } catch (IOException e) {
             throw new RuntimeException("Проблема с чтением изображения", e);
